@@ -1,0 +1,8 @@
+Press A to reduce HP
+Press C to toggle curse
+
+(Press R to reset health)
+
+Once game over, you will have to restart the web page to re-use.
+
+-Bee Lee

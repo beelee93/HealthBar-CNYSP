@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<!--
+    Author: Ong Bee Lee
+    You are free to use the source code in anyway you like!
+    A lot of the assets are from third-party sources. So credits go 
+    to them.
+-->
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <title>CNYang Convocation 2015 - The Final Challenge</title>
+        <style>
+            noshow {
+                visibility: hidden;
+                width: 0px;
+                height: 0px;
+            }
+
+            body {
+                margin: 0px;
+                overflow: hidden;
+            }
+        </style>
+        <script>
+            // ==========================================================================================
+            // global variables
+            // ==========================================================================================
+            var SCREEN_MAIN = 0;
+            var SCREEN_START = 1;
+            var SCREEN_PRESTART = 2;
+
+            var SCREEN_W = 1392;
+            var SCREEN_H = 961;
+
+            var requestAnimationFrame = null;
+            var canvas = null;
+            var context = null;
+            var stopOrder = false;
+            var timePrev = -1;
+            var dimensions = {
+                clientWidth: 0,
+                clientHeight: 0,
+                midX: 0,
+                midY: 0
+            };
+
+            var BGM = null;
+            var BGMVictory = null;
+
+            var entityList = [];
+
+            var entHealthBar = null;                // enemy health bar
+            var entGradHealthBar = null;            // grad health bar
+            var entGrandmasters = null;             // grandmaster faces
+            var entGraduate = null;                 // grad face
+            var entDarken = null;                   // darken screen
+            var entDarkenBlack = null;              // victory darkening
+            var entCornerBorder = null;             // corner borders
+            var entGlyph = null;                    // curse glyph
+            var entScreenIndicator = null;          // screen flash
+            var entWhiteFlash = null;               // screen flash
+            var entBackground = null;               // background picture
+            var entParticleSystem = null;           // particle system
+            var entLaser = [null, null];             // lasers from left and right eyee
+            var entGlyphBack = null;                // background glyphs
+            var entEquations = null;                // equations everywhere
+            var entBomb = null;                     // bomb warning
+
+            // control of particle system
+            var streamTimer = -1;
+
+            // determine the state of rendering
+            var screenState = SCREEN_PRESTART;
+
+            var hasWon = false;
+            var fps = 0;
+            var countDownToNextScreen = -1;
+
+            var nextParticleColor = "white";
+
+            var letitgo;
+            var letitgoplaying = false;
+        </script>
+        <script src="Scripts/HealthBar.js"></script>
+        <script src="Scripts/BaseEntity.js"></script>
+        <script src="Scripts/SoundPlayer.js"></script>
+        <script src="configuration.js"></script>
+        <script src="Scripts/BindingParser.js"></script>
+        <script src="Scripts/Entities/EntityHealthBar.js"></script>
+        <script src="Scripts/Entities/EntityGrandmasters.js"></script>
+        <script src="Scripts/Entities/EntityGraduate.js"></script>
+        <script src="Scripts/Entities/EntityCornerBorder.js"></script>
+        <script src="Scripts/Entities/EntityDarken.js"></script>
+        <script src="Scripts/Entities/EntityGlyph.js"></script>
+        <script src="Scripts/Entities/EntityScreenIndicator.js"></script>
+        <script src="Scripts/Entities/EntityBackground.js"></script>
+        <script src="Scripts/Entities/EntityParticleSystem.js"></script>
+        <script src="Scripts/Entities/EntityLaser.js"></script>
+        <script src="Scripts/Entities/EntityGlyphBack.js"></script>
+        <script src="Scripts/Entities/EntityEquations.js"></script>
+         <script src="Scripts/Entities/EntityBomb.js"></script>
+        <script>
+
+            // ==========================================================================================
+            // setup
+            // ==========================================================================================
+            function setup() {
+                canvas = document.getElementById("canvas");
+                context = canvas.getContext("2d");
+
+                window.addEventListener("keypress", onKeyDown, true);
+                window.onresize = onResize;
+
+                if (!context) {
+                    invokeStopOrder("Cannot create canvas context. Stopping...");
+                    return;
+                }
+
+                // music
+                BGM = document.getElementById("bgm");
+                BGM.volume = 0.6;
+                BGMVictory = document.getElementById("bgmVictory");
+
+                // setup entities
+                entHealthBar = new EntityHealthBar(context, 600, 120);
+                entHealthBar.globalAlpha = 0;
+                entHealthBar.healthBar.animate = false;
+
+                entGradHealthBar = new EntityHealthBar(context, 600, 120);
+                entGradHealthBar.text = "CNYSP Class of 2015";
+                entGradHealthBar.mode = "graduate";
+                entGradHealthBar.globalAlpha = 0;
+
+                entGrandmasters = new EntityGrandmasters(context, 800, 552);
+                entGraduate = new EntityGraduate(context, 512, 512);
+                entGraduate.imgAlpha = 0;
+
+                entCornerBorder = new EntityCornerBorder(context, 512, 512);
+                entDarken = new EntityDarken(context, 0, 0);
+                entDarkenBlack = new EntityDarken(context, 0, 0);
+                entDarkenBlack.animationPhase = [1, 1.0];
+                entDarkenBlack.imgAlpha = 1.0;
+
+                entGlyph = new EntityGlyph(context, 512, 444);
+
+                entScreenIndicator = new EntityScreenIndicator(context, 0, 0);
+                entWhiteFlash = new EntityScreenIndicator(context, 0, 0);
+
+                entBackground = new EntityBackground(context, 0, 0);
+
+                entParticleSystem = new EntityParticleSystem(context, 0, 0);
+                entParticleSystem.setupSystem(50);
+
+                entLaser[0] = new EntityLaser(context, 378, 179);
+                entLaser[1] = new EntityLaser(context, 415, 179);
+
+                entGlyphBack = new EntityGlyphBack(context, 0, 0);
+                entEquations = new EntityEquations(context, 0, 0);
+
+                entBomb = new EntityBomb(context, 0, 0);
+
+                // attach dependencies
+                //entGrandmasters.attachedDarken = entDarken; // this is attached later
+                entGraduate.attachedDarken = entDarken;
+                entGraduate.attachedGlyph = entGlyph;
+                entLaser[0].attachedGrandmaster = entGrandmasters;
+                entLaser[0].attachedGraduate = entGraduate;
+                entLaser[0].attachedWhiteFlash = entWhiteFlash;
+                entLaser[1].attachedGrandmaster = entGrandmasters;
+                entGlyph.attachedGraduate = entGraduate;
+
+                // add entities to list
+                entityList.push(entBackground);
+                entityList.push(entGlyphBack);
+                entityList.push(entHealthBar);
+                entityList.push(entGradHealthBar);
+                entityList.push(entDarken);
+                entityList.push(entGrandmasters);
+                entityList.push(entGraduate);
+                entityList.push(entLaser[0]);
+                entityList.push(entLaser[1]);
+                entityList.push(entGlyph);
+                entityList.push(entEquations);
+                entityList.push(entScreenIndicator);
+                entityList.push(entBomb);
+                entityList.push(entWhiteFlash);
+                entityList.push(entDarkenBlack);
+                entityList.push(entParticleSystem);
+                entityList.push(entCornerBorder);
+
+
+                imgBackground.img = document.getElementById("imgBackground");
+
+                getDimensions();
+                resizeObjects();
+
+                requestAnimationFrame = window.requestAnimationFrame ||
+                                                    window.webkitRequestAnimationFrame ||
+                                                    window.mozRequestAnimationFrame ||
+                                                    window.msRequestAnimationFrame ||
+                                                    window.oRequestAnimationFrame ||
+                                                    function (callback) {
+                                                        return setTimeout(callback, 1);
+                                                    };
+
+                requestAnimationFrame(onFrame);
+
+                bindCommandName("CHANGEHEALTH", cmdChangeHealth);
+                bindCommandName("CURSE", cmdCurse);
+                bindCommandName("PLAYSOUND", cmdPlaySound);
+                bindCommandName("PLAYFROZEN", cmdPlayLetItGo);
+                bindCommandName("BOMB", cmdBomb);
+
+                var kb;
+                for (kb = 0; kb < globalKeyBindings.length; kb++) {
+                    bindKey(globalKeyBindings[kb]);
+                }
+            }
+
+            // ==========================================================================================
+            // Bind commands
+            // ==========================================================================================
+            function cmdChangeHealth(arrArgs) {
+                var chg = parseIntArg("CHANGEHEALTH", arrArgs[0]);
+                if (isNaN(chg))
+                    return;
+
+
+                entHealthBar.healthBar.HP += chg;
+                var color = arrArgs[1];
+                if (color) entScreenIndicator.flash(color);
+
+                var snd = arrArgs[2];
+                soundPlayer.playSound(snd);
+
+
+            }
+
+            function cmdBomb(arrArgs) {
+                if (!entBomb.imgBomb.fade) {
+                    soundPlayer.playSound("sndExplosion");
+                }
+                entBomb.imgBomb.fade = !entBomb.imgBomb.fade;
+            }
+
+            function cmdPlaySound(arrArgs) {
+                if (arrArgs[0]) {
+                    soundPlayer.playSound(arrArgs[0]);
+                }
+            }
+
+            function cmdPlayLetItGo(arrArgs) {
+                if (letitgoplaying) {
+                    letitgo = document.getElementById("sndLetItGo");
+                    letitgo.pause();
+                    letitgoplaying = false;
+                    BGM.volume = 0.6;
+                }
+                else {
+                    letitgo = document.getElementById("sndLetItGo");
+                    letitgo.load();
+                    letitgo.play();
+                    letitgoplaying = true;
+                    BGM.volume = 0;
+                }
+            }
+
+            function cmdCurse(arrArgs) {
+                if (entGraduate.cursedAnimPhase == 0) {
+                    entGraduate.cursedAnimPhase = 0.5;
+                    nextParticleColor = "#CC33FF";
+                    entBackground.styleBlend = "#CC33FF";
+                    entDarken.darken(function () {
+                        var tx, ty;
+                        tx = entGraduate.position.x + entGraduate.origImgSize.width * entGraduate.scale / 2;
+                        ty = entGraduate.position.y + entGraduate.origImgSize.height * entGraduate.scale / 2;
+                        entLaser[0].fireAt(tx, ty);
+                        entLaser[1].fireAt(tx, ty);
+                    });
+                }
+                else if (entGraduate.cursedAnimPhase > 2 && entEquations.animPhase < 1) {
+                    entEquations.animPhase = 1;
+                    entGraduate.glow = true;
+                    soundPlayer.playSound("sndUncurse");
+                    entEquations.finishedAnim = function () {
+                        entDarken.lighten(null);
+                        entGraduate.cursedAnimPhase = 0;
+                        entGlyph.animationPhase = [0, 0];
+
+                        entWhiteFlash.composite = "lighter";
+                        entWhiteFlash.flash("white", true);
+                        entWhiteFlash.hold = 0.3;
+
+                        entBackground.styleBlend = null;
+                        nextParticleColor = "white";
+                        entGraduate.glow = false;
+                        soundPlayer.playSound("sndUncurse2");
+                    };
+                }
+            }
+
+
+            // ==========================================================================================
+            // Linear interpolate between two floats
+            // ==========================================================================================
+            function lerpFloat(f0, f1, t) {
+                if (t < 0) t = 0;
+                if (t > 1) t = 1;
+
+                var fac = 1.0 - t;
+                return t * f1 + fac * f0;
+            }
+
+            // ==========================================================================================
+            // handle key presses
+            // ==========================================================================================
+            function onKeyDown(evt) {
+                switch (screenState) {
+                    case SCREEN_PRESTART:
+                        if (evt.keyCode == 65 || evt.keyCode == 97) {
+                            BGM.play();
+                            screenState = SCREEN_START;
+                        }
+                        break;
+                    case SCREEN_START:
+                        if (evt.keyCode == 65 || evt.keyCode == 97) {
+                            countDownToNextScreen = -1;
+                        }
+                        break;
+                    case SCREEN_MAIN:
+                        var a;
+                        for (a = 0; a < parsedKeyBinding.length; a++) {
+                            if (evt.keyCode == parsedKeyBinding[a].keyCode ||
+                                evt.keyCode == parsedKeyBinding[a].keyCode + 32) {
+                                passArguments(parsedKeyBinding[a].command, parsedKeyBinding[a].arguments);
+                                break;
+                            }
+                        }
+                        break;
+                }
+            }
+
+            // ==========================================================================================
+            // handles frame fetches
+            // ==========================================================================================
+            function onFrame(timeStamp) {
+                if (!stopOrder) {
+                    if (timePrev < 0) {
+                        // allow first frame call to set up timer
+                        timePrev = timeStamp;
+                    }
+                    else {
+                        // get elapsed time in seconds
+                        var diffTime = (timeStamp - timePrev) / 1000.0;
+                        timePrev = timeStamp;
+
+                        // update and render
+                        update(diffTime);
+                        render(diffTime);
+                    }
+
+                    // request for another frame
+                    requestAnimationFrame(onFrame);
+                }
+            }
+
+            // ==========================================================================================
+            // gets the dimensions of the canvas
+            // ==========================================================================================
+            function getDimensions() {
+                dimensions.clientWidth = window.innerWidth;
+                dimensions.clientHeight = window.innerHeight;
+                dimensions.midX = dimensions.clientWidth / 2.0;
+                dimensions.midY = dimensions.clientHeight / 2.0;
+
+                canvas.width = dimensions.clientWidth;
+                canvas.height = dimensions.clientHeight;
+            }
+
+            // ==========================================================================================
+            // called when window is resized to rescale all objects
+            // ==========================================================================================
+            function resizeObjects() {
+                // get the scaling relative to my monitor
+                var scaleX = dimensions.clientWidth / SCREEN_W;
+                var scaleY = dimensions.clientHeight / SCREEN_H;
+
+                // background
+                entBackground.imgBackground.scale = Math.max(scaleX, scaleY);
+
+                // enemy health bar
+                entHealthBar.resize(600 * scaleX, 120);
+                entHealthBar.position.x = 50 * scaleX;
+                entHealthBar.position.y = 200 * scaleY;
+
+                // grad health bar
+                entGradHealthBar.resize(600 * scaleX, 120);
+                entGradHealthBar.position.x = 700 * scaleX;
+                entGradHealthBar.position.y = 620 * scaleY;
+
+                // grandmaster face
+                entGrandmasters.resize(800 * scaleX, 552 * scaleY);
+                entGrandmasters.position.x = 700 * scaleX;
+                entGrandmasters.position.y = 10 * scaleY;
+
+                // graduate face
+                entGraduate.resize(512 * scaleX, 512 * scaleY);
+                entGraduate.position.x = 128 * scaleX;
+                entGraduate.position.y = 500 * scaleY;
+
+                // glyph
+                entGlyph.resize(512 * scaleX, 444 * scaleY);
+                entGlyph.position.x = entGraduate.position.x + entGlyph.midPoint.x * entGlyph.scale;
+                entGlyph.position.y = entGraduate.position.y + entGlyph.midPoint.y * entGlyph.scale;
+
+                // back glyphs
+                entGlyphBack.resize(600 * scaleX, 600 * scaleY);
+                entGlyphBack.position.x = dimensions.clientWidth - 200 * entGlyphBack.scale;
+                entGlyphBack.position.y = dimensions.clientHeight - 20 * entGlyphBack.scale;
+            }
+
+            // ==========================================================================================
+            // handles window resizing
+            // ==========================================================================================
+            function onResize() {
+                getDimensions();
+                resizeObjects();
+            }
+
+            // ==========================================================================================
+            // update function
+            // ==========================================================================================
+            function update(elapsedTime) {
+                switch (screenState) {
+                    case SCREEN_START:
+                        countDownToNextScreen -= elapsedTime;
+                        if (countDownToNextScreen <= 0) {
+                            screenState = SCREEN_MAIN;
+                            entDarkenBlack.lighten(function () {
+                                entHealthBar.fade = true;
+                                entHealthBar.healthBar.animate = true;
+                                entGradHealthBar.fade = true;
+                                entGrandmasters.animateShow();
+                                entGraduate.animateShow();
+                                entGrandmasters.attachedDarken = entDarken;
+                                entGlyphBack.animationPhase = 1;
+                            });
+                        }
+                        break;
+                    case SCREEN_MAIN:
+
+                        // update entities
+                        var a;
+                        for (a = 0; a < entityList.length; a++) {
+                            entityList[a].update(elapsedTime);
+                        }
+
+                        streamTimer -= elapsedTime;
+                        if (streamTimer < 0) {
+                            if (Math.random() < 0.5) {
+                                entParticleSystem.produce(0, dimensions.clientHeight, dimensions.clientWidth, 10, nextParticleColor, null,
+                            0, -(Math.random() * 2 + 0.2));
+                            }
+                            else {
+                                entParticleSystem.produce(0, -10, dimensions.clientWidth, 0, nextParticleColor, null,
+                            0, (Math.random() * 2 + 0.2));
+                            }
+                            streamTimer = Math.random() * 0.1 + 0.02;
+                        }
+
+                        if (!hasWon && entHealthBar.healthBar.HP == 0 && entHealthBar.healthBar.animHP == 0) {
+                            entDarkenBlack.darken(null);
+                            BGM.pause();
+                            BGMVictory.play();
+                            hasWon = true;
+                        }
+
+                        if (hasWon && nextParticleColor != "white") {
+                            nextParticleColor = "white";
+                        }
+                        break;
+                }
+            }
+
+            // ==========================================================================================
+            // rendering function
+            // ==========================================================================================
+            function render(elapsedTime) {
+                switch (screenState) {
+                    case SCREEN_PRESTART:
+                    case SCREEN_START:
+                        // clear screen
+                        context.clearRect(0, 0, dimensions.clientWidth, dimensions.clientHeight);
+                        context.fillStyle = "black";
+                        context.fillRect(0, 0, dimensions.clientWidth, dimensions.clientHeight);
+                        break;
+                    case SCREEN_MAIN:
+                        // clear screen
+                        context.clearRect(0, 0, dimensions.clientWidth, dimensions.clientHeight);
+                        context.fillStyle = "black";
+                        context.fillRect(0, 0, dimensions.clientWidth, dimensions.clientHeight);
+
+                        // render entities
+                        var a;
+                        for (a = 0; a < entityList.length; a++) {
+                            entityList[a].render(elapsedTime);
+                        }
+
+                        if (hasWon) {
+                            context.save();
+                            context.font = "bold 50px Arial";
+                            context.globalAlpha = entDarkenBlack.imgAlpha;
+                            context.textBaseline = "bottom";
+                            context.fillStyle = "white";
+                            context.textAlign = "center";
+                            context.fillText("CONGRATULATIONS!", dimensions.midX, dimensions.midY);
+                            context.font = "32px Arial";
+                            context.textBaseline = "top";
+                            context.fillText("The Grandmasters have been defeated.", dimensions.midX, dimensions.midY + 5);
+                            context.restore();
+                        }
+                        break;
+                }
+
+                /*
+                fps = 1 / elapsedTime;
+                context.save();
+                context.font = "20px Arial";
+                context.textBaseline = "top";
+                context.fillStyle = "white";
+                context.fillText("FPS: " + Math.round(fps, 4).toString(), 200, 3);
+                context.restore();
+                */
+            }
+        </script>
+    </head>
+    <body onload="setup()">
+        <canvas id="canvas">Canvas is not supported in your browser.</canvas>
+        <div style="height:1000px" ></div>
+        <div class="noshow">
+            <img class="noshow" id="imgProfBorder" alt="image" src="Graphics/profborder.png" />
+            <img class="noshow" id="imgShao" alt="image" src="Graphics/shao.png" />
+            <img class="noshow" id="imgTan" alt="image" src="Graphics/tan.png" />
+            <img class="noshow" id="imgSeow" alt="image" src="Graphics/seow.png" />
+            <img class="noshow" id="imgFelipe" alt="image" src="Graphics/felipe.png" />
+            <img class="noshow" id="imgAlex" alt="image" src="Graphics/alex.png" />
+            <img class="noshow" id="imgGraduate" alt="image" src="Graphics/graduate.png" />
+            <img class="noshow" id="imgCornerBorder" alt="image" src="Graphics/cornerborder.png" />
+            <img class="noshow" id="imgTexture" alt="image" src="Graphics/texture.jpg" />
+            <img class="noshow" id="imgBackground" alt="image" src="Graphics/space-background.jpg" />
+            <img class="noshow" id="imgGlyphOut" alt="image" src="Graphics/glyph_out.png" />
+            <img class="noshow" id="imgGlyphMid" alt="image" src="Graphics/glyph_mid.png" />
+            <img class="noshow" id="imgGlyphShock" alt="image" src="Graphics/glyph_shock.png" />
+            <img class="noshow" id="imgPerlin" alt="image" src="Graphics/perlin.png" />
+            <img class="noshow" id="imgGear" alt="image" src="Graphics/gear.png" />
+            <img class="noshow" id="imgLaser" alt="image" src="Graphics/laser.png" />
+            <img class="noshow" id="imgLaserStart" alt="image" src="Graphics/laser_start.png" />
+            <img class="noshow" id="imgEquations" alt="image" src="Graphics/equations.png" />
+            <img class="noshow" id="imgBomb" alt="image" src="Graphics/bomb.png" />
+
+            <img class="noshow" id="imgGlyphBack1" alt="image" src="Graphics/glyph_back1_2.png" />
+            <img class="noshow" id="imgGlyphBack2" alt="image" src="Graphics/glyph_back2_2.png" />
+
+            <audio src="music.mp3" id="bgm" loop="loop" preload="auto"></audio>
+            <audio src="victory.mp3" id="bgmVictory" preload="auto"></audio>
+            <audio src="wrong.ogg" id="sndWrong" preload="auto" ></audio>
+             <audio src="correct.ogg" id="sndCorrect"  preload="auto"></audio>
+            <audio src="cursedlaser.ogg" id="sndLaser"  preload="auto"></audio>
+            <audio src="uncurse.ogg" id="sndUncurse"  preload="auto"></audio>
+            <audio src="uncurse2.ogg" id="sndUncurse2"  preload="auto"></audio>
+            <audio src="badumtss.mp3" id="sndBadumtss"  preload="auto"></audio>
+            <audio src="letitgo.mp3" id="sndLetItGo"  preload="auto"></audio>
+            <audio src="explosion.wav" id="sndExplosion"  preload="auto"></audio>
+           </div>
+    </body>
+</html>
